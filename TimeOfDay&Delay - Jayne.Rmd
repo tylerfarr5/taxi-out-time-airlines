@@ -1,0 +1,180 @@
+---
+title: "Time of Day / Delay Group"
+author: "Jayne Hoyt"
+date: "`r format(Sys.time(), '%B, %d, %Y')`"
+output:
+  html_document: "default"
+  pdf_document: "default"
+  theme: "journal"
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(car) 
+library(stats)
+library(paletteer)
+
+Air_data <- read.csv("FinalData.csv")
+
+
+#View(Air_data)
+range(Air_data$DepTime)
+```
+
+```{r}
+#Create Variable for Departure Hours Night vs Day
+
+Air_data$DepTime <-formatC(Air_data$DepTime, width = 4, format = "d", flag = "0")  #Makes sure each entry is length 4, adds 0s if not
+Air_data$DepTime <- substr(Air_data$DepTime, start = 1, stop = 2)  #Extracts first two characters to get hours only
+Air_data$DepTime <- as.numeric(Air_data$DepTime)
+Air_data$DepTime[Air_data$DepTime == 24] <- 00   # Make sure we only have one variable for midnight
+  
+Air_data <- mutate(Air_data, night = (DepTime < 06 | DepTime > 19)) #Between 7pm and 6am
+head(Air_data)
+```
+# Create Linear Model for `night`
+
+```{r}
+air_lm <-  lm(TaxiOut ~ night, data = Air_data)
+```
+
+# Wilcox Test
+
+Determine if there is a difference in means between "night" time and "day" time
+
+
+```{r}
+#ANOVA for night vs day
+
+wilcox.test(TaxiOut ~ night, alternative = c("greater"), data = Air_data)
+Air_data %>% group_by(night) %>% summarize(mean(TaxiOut))
+```
+
+We can see there is a significant difference in means between day time and night time.
+
+```{r}
+# Graph for Time of Departure
+
+library(ggrepel)
+
+Air_data_avg_time <- Air_data %>%
+  group_by(DepTime) %>%
+  summarise(mean_Taxi = mean(TaxiOut, na.rm = TRUE))
+
+timePlot <- ggplot(data=Air_data_avg_time, aes(x=DepTime, y=mean_Taxi))  +
+  geom_line()+
+  geom_point()+ 
+  labs(x = "Time of Day (Hour)", y = "Taxi Out Time (minutes)")+
+  theme_classic() +
+  scale_fill_manual(values = paletteer_c("grDevices::Purples 3", 30))+
+  theme(legend.position = "none", axis.title = element_text(size= 20, face= "bold"), axis.text=element_text(size=18))
+
+timePlot
+
+```
+
+
+
+```{r}
+# See if time `05` where spike occurs is significantly different from the other times
+
+depTime.aov <- aov(TaxiOut ~ as.factor(DepTime), data = Air_data)
+depTimeTukey <- TukeyHSD(depTime.aov)
+depTimeTukey
+```
+
+We can see a significant difference between time `5` and other times.
+
+
+#######################
+
+# Departure Delay Groups
+
+```{r}
+#Categorize by Early and Late
+
+Air_data <- mutate(Air_data, notDelayed = (DepartureDelayGroups <= 0)) #Less than or equal to 0
+#View(Air_data)
+```
+
+# Create Linear Model with `early`
+
+```{r}
+air_lm <-  lm(TaxiOut ~ notDelayed, data = Air_data)
+```
+
+# Wilcox Test
+
+Determine if there is a difference in means between `early` flights and `delayed` flights
+
+
+```{r}
+#ANOVA for Delay Groups "notDelayed" vs "delayed"
+
+wilcox.test(TaxiOut ~ notDelayed, alternative = c("greater"), data = Air_data)
+Air_data %>% group_by(notDelayed) %>% summarize(mean(TaxiOut))
+```
+```{r}
+# Graph for `DepartureDelayGroups`
+
+Air_data$DepartureDelayGroups <- as.numeric(Air_data$DepartureDelayGroups)
+
+Air_data_Delay <- Air_data %>%
+  group_by(DepartureDelayGroups) %>%
+  summarise(mean_Taxi = mean(TaxiOut, na.rm = TRUE))
+
+DelayPlot2 <- ggplot(data=Air_data_Delay, aes(x=as.factor(DepartureDelayGroups), y=mean_Taxi)) +
+  geom_col(stat="identity", fill = c("#4A3D8D", "#4A3D8D", "#4A3D8D", "#8c81d1", "#8c81d1", "#8c81d1", "#8c81d1", "#8c81d1", "#8c81d1","#8c81d1", "#8c81d1", "#8c81d1", "#8c81d1", "#8c81d1", "#8c81d1")) + 
+  labs(x = "Departure Delay (by 15 minutes)", y = "Taxi Out Time (minutes)") +
+  theme_classic()  +
+  theme(legend.position = "none")+
+  theme(legend.position = "none", axis.title = element_text(size= 20, face= "bold"), axis.text=element_text(size=18))
+
+DelayPlot <- ggplot(data=Air_data_Delay, aes(x=as.factor(DepartureDelayGroups), y=mean_Taxi)) +
+  geom_col(stat="identity", fill = "#4A3D8D") + 
+  labs(x = "Departure Delay (by 15 minutes)", y = "Taxi Out Time (minutes)") +
+  theme_classic()  +
+  theme(legend.position = "none")+
+  theme(legend.position = "none", axis.title = element_text(size= 20, face= "bold"), axis.text=element_text(size=18))
+
+DelayPlot
+
+```
+
+###########################
+
+# Four Different Times of Day in `TimeOfDay` Variable
+
+```{r}
+#Create the `TimeOfDay` Variable
+
+Air_data$TimeOfDay <- ifelse(Air_data$DepTime >= 02 & Air_data$DepTime < 08, "Morning", #Between 2am and 8am
+                            ifelse(Air_data$DepTime >= 08 & Air_data$DepTime < 14, "Day",#Between 8am and 2pm
+                            ifelse(Air_data$DepTime >= 14 & Air_data$DepTime < 20, "Evening",  #Between 2pm and 8pm
+                                   "Night")))#Between 8pm and 2am
+table(Air_data$TimeOfDay)
+```
+
+```{r}
+#See the different means for each time 
+
+Air_data %>% group_by(TimeOfDay) %>% summarize(mean(TaxiOut))
+```
+
+```{r}
+# ANOVA
+time_lm <- lm(TaxiOut ~ TimeOfDay, data = Air_data)
+anova(time_lm)
+
+time_aov <- aov(TaxiOut ~ TimeOfDay, data = Air_data)
+TukeyHSD(time_aov)
+```
+We can see here that:
+
+Morning = highest
+Day 
+Evening
+Night = lowest
