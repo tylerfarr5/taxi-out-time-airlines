@@ -1,0 +1,206 @@
+---
+title: "PracticumAnalysis-Visuals"
+output: html_document
+date: "2023-07-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Loading in packages and data}
+
+library(tidyverse)
+flight <- read.csv("D:/b19/FinalData.csv")
+
+```
+
+```{r TaxiOut ~ Distance}
+
+# EDA and Visualization
+
+
+# Correlation analysis - 0.056 very weak positive correlation relationship
+correlation <- cor(flight$TaxiOut, flight$Distance)
+print(correlation)
+cor.test(flight$TaxiOut, flight$Distance, method = "spearman")
+
+# Simple Linear Regression - statistically significant but very low R^2 (0.003)
+
+distance_lm <- lm(TaxiOut ~ Distance, data = flight)
+summary(distance_lm)
+
+distancegroup_lm <- lm(TaxiOut ~ DistanceGroup, data = flight)
+summary(distancegroup_lm)
+
+## Checking assumptions 
+
+### Linearity - not linear...
+ggplot(flight, aes(x = Distance, y = TaxiOut)) + geom_point()
+
+
+
+# Kruskal Wallis Test bc assumptions not met (TaxiOut and Distance Group)
+kruskal.test(TaxiOut ~ factor(DistanceGroup), data = flight)
+library(dunn.test)
+dunn.test(flight$TaxiOut, g = flight$DistanceGroup, method = "bonferroni")
+
+
+
+```
+
+```{r Plots for Slides}
+
+flight_distancegroup_taxiout <- flight %>%
+  group_by(DistanceGroup) %>%
+  summarize(mean_TaxiOut = round(mean(TaxiOut),2))
+
+#ggplot(flight_distancegroup_taxiout, aes(x = DistanceGroup, y = mean_TaxiOut)) + geom_col()
+
+#ggplot(flight, aes(x = Distance, y = TaxiOut)) + geom_point()
+purple <- paletteer_c("grDevices::Purples 3", 30)
+DistanceGroupPlot <- ggplot(flight_distancegroup_taxiout, aes(x=DistanceGroup, y=mean_TaxiOut, fill = factor(DistanceGroup), paletteer_c("grDevices::Purples 3", 30))) +
+  geom_col() +
+  labs(x = "Distance Group", y = "Average Taxi Out Time (minutes)") +
+  theme_classic()+
+  theme(legend.position = "none")+
+  scale_fill_manual(values = purple) + scale_y_continuous() 
+
+DistanceGroupPlot
+
+```
+
+
+
+```{r Comparison Bar Charts for Airports}
+
+# Adding timeofday variable
+
+airport <- flight
+airport$DepTime <- formatC(airport$DepTime, width =4, format = "d", flag = "0")
+airport$DepTime <- substr(airport$DepTime, start = 1, stop = 2)
+airport$DepTime <- as.numeric(airport$DepTime)
+airport$DepTime[airport$DepTime == 24] <- 00
+
+airport <- airport %>% 
+  rowwise() %>%
+  mutate(night = ifelse((DepTime < 06 | DepTime > 19),1,0))
+
+airport <- airport %>%
+  rowwise() %>%
+  mutate(TimeOfDay = ifelse((DepTime >= 02 & DepTime < 08), "Morning", 
+                            ifelse((DepTime >= 08 & DepTime < 14), "Day", 
+                                   ifelse((DepTime >= 14 & DepTime < 20), "Evening", 
+                                          ifelse((DepTime %in% c(20,21,22,23,24,01)), "Night", NA)))))
+table(airport$TimeOfDay)
+
+# Brute force attempt at side by side bar charts
+
+average_otherairports_morning <- airport %>%
+  filter(! Origin %in% c("MIA", "PHX", "ORD")) %>%
+  filter(TimeOfDay == "Morning")
+
+average_otherairports_day <- airport %>%
+  filter(! Origin %in% c("MIA", "PHX", "ORD")) %>%
+  filter(TimeOfDay == "Day")
+
+average_otherairports_evening <- airport %>%
+  filter(! Origin %in% c("MIA", "PHX", "ORD")) %>%
+  filter(TimeOfDay == "Evening")
+
+average_otherairports_night <- airport %>%
+  filter(! Origin %in% c("MIA", "PHX", "ORD")) %>%
+  filter(TimeOfDay == "Night")
+
+average_otherairports_mean_morning <- mean(average_otherairports_morning$TaxiOut)
+average_otherairports_mean_day <- mean(average_otherairports_day$TaxiOut)
+average_otherairports_mean_evening <- mean(average_otherairports_evening$TaxiOut)
+average_otherairports_mean_night <- mean(average_otherairports_night$TaxiOut)
+
+MIA_morning <- airport %>%
+  filter(Origin == "MIA") %>%
+  filter(TimeOfDay == "Morning")
+MIA_day <- airport %>%
+  filter(Origin == "MIA") %>%
+  filter(TimeOfDay == "Day")
+MIA_evening <- airport %>%
+  filter(Origin == "MIA") %>%
+  filter(TimeOfDay == "Evening")
+MIA_night <- airport %>%
+  filter(Origin == "MIA") %>%
+  filter(TimeOfDay == "Night")
+
+ORD_morning <- airport %>%
+  filter(Origin == "ORD") %>%
+  filter(TimeOfDay == "Morning")
+ORD_day <- airport %>%
+  filter(Origin == "ORD") %>%
+  filter(TimeOfDay == "Day")
+ORD_evening <- airport %>%
+  filter(Origin == "ORD") %>%
+  filter(TimeOfDay == "Evening")
+ORD_night <- airport %>%
+  filter(Origin == "ORD") %>%
+  filter(TimeOfDay == "Night")
+
+PHX_morning <- airport %>%
+  filter(Origin == "PHX") %>%
+  filter(TimeOfDay == "Morning")
+PHX_day <- airport %>%
+  filter(Origin == "PHX") %>%
+  filter(TimeOfDay == "Day")
+PHX_evening <- airport %>%
+  filter(Origin == "PHX") %>%
+  filter(TimeOfDay == "Evening")
+PHX_night <- airport %>%
+  filter(Origin == "PHX") %>%
+  filter(TimeOfDay == "Night")
+
+MIA_mean_morning <- mean(MIA_morning$TaxiOut)
+MIA_mean_day <- mean(MIA_day$TaxiOut)
+MIA_mean_evening <- mean(MIA_evening$TaxiOut)
+MIA_mean_night <- mean(MIA_night$TaxiOut)
+
+ORD_mean_morning <- mean(ORD_morning$TaxiOut)
+ORD_mean_day <- mean(ORD_day$TaxiOut)
+ORD_mean_evening <- mean(ORD_evening$TaxiOut)
+ORD_mean_night <- mean(ORD_night$TaxiOut)
+
+PHX_mean_morning <- mean(PHX_morning$TaxiOut)
+PHX_mean_day <- mean(PHX_day$TaxiOut)
+PHX_mean_evening <- mean(PHX_evening$TaxiOut)
+PHX_mean_night <- mean(PHX_night$TaxiOut)
+
+
+
+airport_data <- data.frame(
+  Airport = c("MIA Morning", "MIA Day", "MIA Evening", "MIA Night", "ORD Morning", "ORD Day", "ORD Evening", "ORD Night", "PHX Morning", "PHX Day", "PHX Evening", "PHX Night", "Other Morning", "Other Day", "Other Evening", "Other Night"),
+  MeanTaxiOut = c(MIA_mean_morning, MIA_mean_day, MIA_mean_evening, MIA_mean_night, ORD_mean_morning, ORD_mean_day, ORD_mean_evening, ORD_mean_night,PHX_mean_morning, PHX_mean_day, PHX_mean_evening, PHX_mean_night,average_otherairports_mean_morning, average_otherairports_mean_day, average_otherairports_mean_evening, average_otherairports_mean_night)
+)
+
+ggplot(airport_data, aes(x = Airport, y = MeanTaxiOut)) + geom_bar(stat = "identity")
+
+# A better attempt at side by side bar charts for airports by timeofday
+
+specific <- c("MIA", "ORD", "PHX")
+average_specific_airports <- airport %>%
+  filter(Origin %in% specific) %>%
+  filter(!is.na(TimeOfDay)) %>%
+  group_by(Origin, TimeOfDay) %>%
+  summarize(AvgTaxiOut = mean(TaxiOut))
+
+other <- c("ATL", "CLT", "DEN", "DFW", "LAS", "LAX", "MCO")
+average_other_airports <- airport %>%
+  filter(Origin %in% other) %>%
+  filter(!is.na(TimeOfDay)) %>%
+  group_by(TimeOfDay) %>%
+  summarize(AvgTaxiOut = mean(TaxiOut)) %>%
+  mutate(Origin = "Other") %>%
+  select(Origin, everything())
+
+
+airport_timeofday <- bind_rows(average_specific_airports, average_other_airports)
+
+ggplot(airport_timeofday, aes(x = Origin, y = AvgTaxiOut, fill = TimeOfDay)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8)) 
+```
